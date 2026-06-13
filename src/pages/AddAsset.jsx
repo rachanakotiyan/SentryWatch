@@ -1,3 +1,4 @@
+import { saveAsset } from "../utils/storage";
 import { useState } from "react";
 
 function AddAsset() {
@@ -5,15 +6,22 @@ function AddAsset() {
   const [domain, setDomain] = useState("");
   const [githubOrg, setGithubOrg] = useState("");
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+ const handleSubmit = (e) => {
+  e.preventDefault();
 
-    console.log({
-      email,
-      domain,
-      githubOrg,
-    });
+  saveAsset({
+    email,
+    domain,
+    githubOrg,
+  });
 
+  alert("Asset Saved!");
+
+  setEmail("");
+  setDomain("");
+  setGithubOrg("");
+};
+    saveAsset({ email, domain, githubOrg });
     alert("Asset Saved!");
   };
 
@@ -62,6 +70,6 @@ function AddAsset() {
       </form>
     </div>
   );
-}
+
 
 export default AddAsset;
