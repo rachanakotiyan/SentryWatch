@@ -15,6 +15,16 @@ function AddAsset({ assets, setAssets }) {
     githubOrg,
   });
 
+  setAssets([
+  ...assets,
+  {
+    id: Date.now(),
+    email,
+    domain,
+    githubOrg,
+  },
+]);
+
   alert("Asset Saved!");
 
   setEmail("");
