@@ -21,14 +21,10 @@ function AddAsset() {
   setDomain("");
   setGithubOrg("");
 };
-    saveAsset({ email, domain, githubOrg });
-    alert("Asset Saved!");
-  };
-
+  
   return (
     <div>
       <h1>Add Asset</h1>
-
       <form onSubmit={handleSubmit}>
         <div>
           <label>Email:</label>
@@ -71,5 +67,6 @@ function AddAsset() {
     </div>
   );
 
+}
 
 export default AddAsset;
