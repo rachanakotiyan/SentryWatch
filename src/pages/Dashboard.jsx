@@ -1,7 +1,8 @@
 import { getAssets } from "../utils/storage";
+import { deleteAsset } from "../utils/storage";
 
-function Dashboard() {
-  const assets = getAssets();
+function Dashboard({ assets, setAssets }) {
+  
 
   return (
     <div>
@@ -16,6 +17,8 @@ function Dashboard() {
               <th>Email</th>
               <th>Domain</th>
               <th>GitHub Org</th>
+              <th>Actions</th>
+
             </tr>
           </thead>
 
@@ -25,6 +28,19 @@ function Dashboard() {
                 <td>{asset.email}</td>
                 <td>{asset.domain}</td>
                 <td>{asset.githubOrg}</td>
+                <td>
+                  <button onClick={() => {
+        deleteAsset(asset.id);
+
+        setAssets(
+          assets.filter(
+            (a) => a.id !== asset.id
+          )
+        );
+      }}
+    >
+      Delete</button>
+                </td>
               </tr>
             ))}
           </tbody>

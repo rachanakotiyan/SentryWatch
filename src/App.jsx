@@ -15,7 +15,10 @@ function App() {
 
       <hr />
 
-      <Dashboard assets={assets} />
+      <Dashboard
+  assets={assets}
+  setAssets={setAssets}
+/>
     </div>
   );
 }
