@@ -1,12 +1,21 @@
+import { useState } from "react";
 import AddAsset from "./pages/AddAsset";
 import Dashboard from "./pages/Dashboard";
+import { getAssets } from "./utils/storage";
 
 function App() {
+  const [assets, setAssets] = useState(getAssets());
+
   return (
     <div>
-      <AddAsset />
+      <AddAsset
+        assets={assets}
+        setAssets={setAssets}
+      />
+
       <hr />
-      <Dashboard />
+
+      <Dashboard assets={assets} />
     </div>
   );
 }

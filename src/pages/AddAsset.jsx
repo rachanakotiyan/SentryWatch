@@ -1,7 +1,7 @@
 import { saveAsset } from "../utils/storage";
 import { useState } from "react";
 
-function AddAsset() {
+function AddAsset({ assets, setAssets }) {
   const [email, setEmail] = useState("");
   const [domain, setDomain] = useState("");
   const [githubOrg, setGithubOrg] = useState("");
