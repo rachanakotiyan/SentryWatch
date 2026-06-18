@@ -275,7 +275,7 @@ export default function Dashboard({
               <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Recent Alerts</h2>
               {alerts.length > 0 && (
                 <button 
-                  style={{ background: "none", border: "none", color: "var(--severity-low)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "var(--color-primary)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
                   onClick={() => navigateToTab("alerts")}
                 >
                   View All
