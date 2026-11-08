@@ -6,6 +6,24 @@ This repository contains a fully working prototype featuring local storage-based
 
 ---
 
+## Project Structure
+
+```text
+server/
+  index.js                 Express app setup and startup
+  routes/
+    scanRoutes.js          Email, domain, and GitHub scan endpoints
+src/
+  App.jsx                  Frontend layout and navigation
+  pages/                   Dashboard, asset, alert, and scan-result views
+  services/                Frontend clients for the scan API
+  utils/storage.js         Browser localStorage persistence
+```
+
+The scan endpoints currently live together in `server/routes/scanRoutes.js`; the separate `src/services/` files call those endpoints from the browser.
+
+---
+
 ## Key Features
 
 1. **Multi-Asset Monitoring**:
