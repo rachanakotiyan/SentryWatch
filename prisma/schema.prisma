@@ -1,1 +1,71 @@
 // TODO: Define the PostgreSQL datasource and Prisma models.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  ANALYST
+}
+
+enum AssetType {
+  DOMAIN
+  REPOSITORY
+  EMAIL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(ANALYST)
+  createdAt    DateTime @default(now())
+  assets       Asset[]
+}
+
+model Asset {
+  id          String    @id @default(uuid())
+  name        String
+  type        AssetType
+  target      String    // Domain URL, Git Repo, or Target Email
+  status      String    @default("SECURE")
+  lastScanned DateTime?
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scans       Scan[]
+  alerts      Alert[]
+  createdAt   DateTime  @default(now())
+}
+
+model Scan {
+  id        String   @id @default(uuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  passed    Boolean
+  riskScore Int      // 0 - 100
+  payload   Json     // Security telemetry output
+  scannedAt DateTime @default(now())
+}
+
+model Alert {
+  id        String    @id @default(uuid())
+  assetId   String
+  asset     Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  severity  RiskLevel
+  title     String
+  details   String
+  resolved  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
