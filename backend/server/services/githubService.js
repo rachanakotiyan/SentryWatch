@@ -7,11 +7,11 @@ const MAX_BYTES = 200_000;
 const MAX_FINDINGS = 50;
 
 // Files that should never be in a public repo.
-const SENSITIVE_FILE = /(^|\/)(\\.env(\\.[\\w.-]+)?|id_(rsa|dsa|ecdsa|ed25519)|\\.npmrc|\\.pgpass|\\.htpasswd|terraform\\.tfstate|[\\w.-]+\\.(pem|key|p12|pfx))$/i;
-const SAFE_ENV_TEMPLATE = /\\.env\\.(example|sample|template|dist|defaults?)$/i;
-const SKIP_PATH = /(^|\\/)(node_modules|vendor|dist|build|\\.git|__pycache__)\\/|package-lock\\.json$|yarn\\.lock$|pnpm-lock\\.yaml$|\\.min\\.(js|css)$|\\.(png|jpe?g|gif|svg|ico|pdf|zip|gz|woff2?|ttf|mp4|lock)$/i;
-const TEXT_EXT = /\\.(js|jsx|ts|tsx|mjs|cjs|py|rb|go|java|php|cs|sh|bash|ya?ml|json|toml|ini|cfg|conf|properties|tf|xml|env|txt|md|gradle)$/i;
-const PLACEHOLDER = /^(changeme|change_me|your[-_ ]|example|xxx+|\\*+|<.*>|\\$\\{.*\\}|\\{\\{.*\\}\\}|process\\.env|todo|dummy|test|password|secret|null|none|true|false)/i;
+const SENSITIVE_FILE = /(^|\/)(\.env(\.[\w.-]+)?|id_(rsa|dsa|ecdsa|ed25519)|\.npmrc|\.pgpass|\.htpasswd|terraform\.tfstate|[\w.-]+\.(pem|key|p12|pfx))$/i;
+const SAFE_ENV_TEMPLATE = /\.env\.(example|sample|template|dist|defaults?)$/i;
+const SKIP_PATH = /(^|\/)(node_modules|vendor|dist|build|\.git|__pycache__)\/|package-lock\.json$|yarn\.lock$|pnpm-lock\.yaml$|\.min\.(js|css)$|\.(png|jpe?g|gif|svg|ico|pdf|zip|gz|woff2?|ttf|mp4|lock)$/i;
+const TEXT_EXT = /\.(js|jsx|ts|tsx|mjs|cjs|py|rb|go|java|php|cs|sh|bash|ya?ml|json|toml|ini|cfg|conf|properties|tf|xml|env|txt|md|gradle)$/i;
+const PLACEHOLDER = /^(changeme|change_me|your[-_ ]|example|xxx+|\*+|<.*>|\$\{.*\}|\{\{.*\}\}|process\.env|todo|dummy|test|password|secret|null|none|true|false)/i;
 
 export const SECRET_PATTERNS = [
   { id: 'aws-access-key', name: 'AWS access key ID', severity: 'CRITICAL', re: /\b(AKIA|ASIA)[0-9A-Z]{16}\b/g },
