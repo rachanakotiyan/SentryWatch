@@ -4,7 +4,7 @@ export default function DemoBanner({ onDismiss }) {
       <div className="demo-banner-content">
         <span className="demo-badge">DEMO MODE</span>
         <span>
-          Email breach scans return sample findings because no <code>HIBP_API_KEY</code> is configured on the backend. Domain &amp; repository scans are fully live.
+          This scan returned demo findings. Email breach lookups use the free XposedOrNot API by default. Set <code>HIBP_API_KEY</code> in the backend for full Have I Been Pwned coverage. Domain &amp; repository scans are fully live.
         </span>
       </div>
       {onDismiss && (

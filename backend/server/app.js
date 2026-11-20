@@ -25,7 +25,12 @@ export function createApp({ store, scanners, authLimit = 20, scanLimit = 20 } = 
     message: { error: 'Too many requests, slow down' } });
 
   app.get('/', (req, res) => res.send('SentryWatch backend running'));
-  app.get('/api/health', (req, res) => res.json({ ok: true, storage: store.kind, demoMode: process.env.DEMO_MODE === 'true' }));
+  app.get('/api/health', (req, res) => res.json({
+    ok: true,
+    storage: store.kind,
+    demoMode: process.env.DEMO_MODE === 'true',
+    emailProvider: process.env.HIBP_API_KEY ? 'hibp' : 'xposedornot',
+  }));
 
   const auth = requireAuth(store);
   app.use('/api/auth', limiter(authLimit, 15 * 60 * 1000), authRoutes(store));

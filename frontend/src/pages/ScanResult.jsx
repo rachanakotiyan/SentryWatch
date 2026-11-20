@@ -9,11 +9,11 @@ import { getErrorMessage, getScanHistory, resolveAlert, scanAsset } from "../uti
 import { useToast } from "../context/useToast";
 
 function scanErrorMessage(error, type) {
-  if (error.response?.status === 503 && type === "EMAIL") {
-    return "Email scanning not configured. Add a HIBP_API_KEY to the backend to enable email scans.";
-  }
   if (error.response?.status === 409) {
     return "A scan is already running for this asset. Wait for it to finish before starting another.";
+  }
+  if (type === "EMAIL" && (error.response?.status === 502 || error.response?.status === 503)) {
+    return "Could not reach the breach database (network error or rate limit). Try again in a moment.";
   }
   return getErrorMessage(error, "The scan failed. No results were saved.");
 }
