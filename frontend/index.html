@@ -4,7 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sentrywatch</title>
+    <meta name="description" content="SentryWatch - External attack surface monitoring for email breaches, SSL/TLS certificates, and exposed GitHub credentials." />
+    <title>SentryWatch — External Attack Surface Monitoring</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('sw_theme');
+          if (t === 'light' || t === 'dark') {
+            document.documentElement.setAttribute('data-theme', t);
+          } else {
+            document.documentElement.removeAttribute('data-theme');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

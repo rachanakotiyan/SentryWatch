@@ -1,41 +1,70 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useOutletContext } from "react-router-dom";
+import { BrowserRouter, Outlet, Route, Routes, useOutletContext } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import AppHeader from "./components/AppHeader";
+import Footer from "./components/Footer";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Toast from "./components/Toast";
+import DemoBanner from "./components/DemoBanner";
 import { AuthProvider } from "./context/AuthContext";
-import AddAsset from "./pages/AddAsset";
-import Alerts from "./pages/Alerts";
-import Dashboard from "./pages/Dashboard";
+import { ThemeProvider } from "./context/ThemeContext";
+import { ToastProvider } from "./context/ToastContext";
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import AddAsset from "./pages/AddAsset";
 import ScanResult from "./pages/ScanResult";
-import { getAlerts, getAssets, getErrorMessage } from "./utils/storage";
+import Alerts from "./pages/Alerts";
+import NotFound from "./pages/NotFound";
+import { getAlerts, getAssets, getErrorMessage, getHealth } from "./utils/storage";
 
 function AppShell() {
   const [assets, setAssets] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [demoMode, setDemoMode] = useState(false);
+  const [dismissedDemo, setDismissedDemo] = useState(false);
   const [resolvedThisSession, setResolvedThisSession] = useState(() => {
-    const count = Number(sessionStorage.getItem("sw_resolved_this_session"));
-    return Number.isFinite(count) ? count : 0;
+    try {
+      const count = Number(sessionStorage.getItem("sw_resolved_this_session"));
+      return Number.isFinite(count) ? count : 0;
+    } catch {
+      return 0;
+    }
   });
 
   const refreshData = useCallback(async () => {
-    const [nextAssets, nextAlerts] = await Promise.all([getAssets(), getAlerts()]);
-    setAssets(nextAssets);
-    setAlerts(nextAlerts);
-    setLoadError("");
-    setLoading(false);
+    try {
+      const [nextAssets, nextAlerts, health] = await Promise.all([
+        getAssets(),
+        getAlerts(),
+        getHealth(),
+      ]);
+      setAssets(nextAssets);
+      setAlerts(nextAlerts);
+      if (health?.demoMode) {
+        setDemoMode(true);
+      }
+      setLoadError("");
+    } catch (err) {
+      setLoadError(getErrorMessage(err, "Unable to refresh workspace data."));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getAssets(), getAlerts()])
-      .then(([nextAssets, nextAlerts]) => {
+    Promise.all([getAssets(), getAlerts(), getHealth()])
+      .then(([nextAssets, nextAlerts, health]) => {
         if (!active) return;
         setAssets(nextAssets);
         setAlerts(nextAlerts);
+        if (health?.demoMode) {
+          setDemoMode(true);
+        }
       })
       .catch((error) => {
         if (active) setLoadError(getErrorMessage(error, "Unable to load your monitoring data."));
@@ -49,7 +78,11 @@ function AppShell() {
   const incrementResolved = () => {
     setResolvedThisSession((current) => {
       const next = current + 1;
-      sessionStorage.setItem("sw_resolved_this_session", String(next));
+      try {
+        sessionStorage.setItem("sw_resolved_this_session", String(next));
+      } catch {
+        // ignore
+      }
       return next;
     });
   };
@@ -59,20 +92,48 @@ function AppShell() {
   return (
     <div className="app-container">
       <Navbar openAlertsCount={openAlertsCount} />
-      <main className="main-content">
-        {loadError && <div className="notice notice-error" role="alert">{loadError}</div>}
-        {loading ? (
-          <div className="card loading-card" role="status">Loading your SentryWatch workspace...</div>
-        ) : (
-          <Outlet context={{
-            assets,
-            alerts,
-            refreshData,
-            resolvedThisSession,
-            incrementResolved,
-          }} />
+      <div className="app-main-column">
+        <AppHeader demoMode={demoMode} />
+
+        {demoMode && !dismissedDemo && (
+          <div className="app-banner-container">
+            <DemoBanner onDismiss={() => setDismissedDemo(true)} />
+          </div>
         )}
-      </main>
+
+        <main className="main-content">
+          {loadError && (
+            <div className="notice notice-error" role="alert">
+              <span>{loadError}</span>
+              <button
+                type="button"
+                className="btn-link-retry"
+                onClick={() => { setLoadError(""); refreshData(); }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="card loading-card" role="status">
+              <div className="spinner-inline" aria-hidden="true" />
+              <p style={{ marginTop: 12 }}>Loading your SentryWatch perimeter workspace...</p>
+            </div>
+          ) : (
+            <Outlet context={{
+              assets,
+              alerts,
+              refreshData,
+              resolvedThisSession,
+              incrementResolved,
+              demoMode,
+            }} />
+          )}
+        </main>
+
+        <Footer slim />
+      </div>
     </div>
   );
 }
@@ -107,21 +168,34 @@ function RoutedScanResult() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppShell />}>
-              <Route index element={<RoutedDashboard />} />
-              <Route path="assets/new" element={<RoutedAddAsset />} />
-              <Route path="assets/:assetId" element={<RoutedScanResult />} />
-              <Route path="alerts" element={<RoutedAlerts />} />
-            </Route>
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <Toast />
+            <Routes>
+              {/* Public landing page */}
+              <Route path="/" element={<Landing />} />
+
+              {/* Public Auth routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              {/* Protected App Workspace */}
+              <Route path="/app" element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route index element={<RoutedDashboard />} />
+                  <Route path="assets/new" element={<RoutedAddAsset />} />
+                  <Route path="assets/:assetId" element={<RoutedScanResult />} />
+                  <Route path="alerts" element={<RoutedAlerts />} />
+                </Route>
+              </Route>
+
+              {/* 404 Fallback */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

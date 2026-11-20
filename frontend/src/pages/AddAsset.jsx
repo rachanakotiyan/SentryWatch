@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createAsset, getErrorMessage } from "../utils/storage";
+import { useToast } from "../context/useToast";
 
 const types = [
   { value: "EMAIL", label: "Email Address", placeholder: "security-team@company.com" },
@@ -52,6 +53,8 @@ function validateTarget(type, input) {
 export default function AddAsset({ refreshData }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { showToast } = useToast();
+
   const [type, setType] = useState("EMAIL");
   const [target, setTarget] = useState("");
   const [name, setName] = useState("");
@@ -70,11 +73,18 @@ export default function AddAsset({ refreshData }) {
     setError("");
     setSubmitting(true);
     try {
-      const asset = await createAsset({ type, target: target.trim(), ...(name.trim() ? { name: name.trim() } : {}) });
+      const asset = await createAsset({
+        type,
+        target: target.trim(),
+        ...(name.trim() ? { name: name.trim() } : {}),
+      });
+      showToast(`Asset ${asset.name || asset.target} added successfully. Starting initial scan...`, "success");
       await refreshData();
-      navigate(`/assets/${asset.id}`, { state: { scanImmediately: true, from: location.pathname } });
+      navigate(`/app/assets/${asset.id}`, { state: { scanImmediately: true, from: location.pathname } });
     } catch (requestError) {
-      setError(getErrorMessage(requestError, "Could not add this asset."));
+      const msg = getErrorMessage(requestError, "Could not add this asset.");
+      setError(msg);
+      showToast(msg, "error");
     } finally {
       setSubmitting(false);
     }
@@ -83,11 +93,19 @@ export default function AddAsset({ refreshData }) {
   return (
     <div className="anim-fade-in add-asset-page">
       <header className="page-heading">
-        <h1>Monitor an asset</h1>
-        <p>Register an email, domain, or GitHub repository to start monitoring its exposure.</p>
+        <div className="page-heading-row">
+          <div>
+            <h1>Register monitored asset</h1>
+            <p>Add a domain, corporate email address, or GitHub repository to external attack surface tracking.</p>
+          </div>
+          <Link to="/app" className="btn btn-secondary">
+            &larr; Back to dashboard
+          </Link>
+        </div>
       </header>
+
       <section className="card add-asset-card">
-        <div className="asset-type-tabs" role="tablist" aria-label="Asset type">
+        <div className="asset-type-tabs" role="tablist" aria-label="Asset type selection">
           {types.map((item) => (
             <button
               key={item.value}
@@ -101,37 +119,53 @@ export default function AddAsset({ refreshData }) {
             </button>
           ))}
         </div>
+
         <form onSubmit={handleSubmit} noValidate>
-          <label className="form-label" htmlFor="asset-target">{selectedType.label}</label>
-          <input
-            id="asset-target"
-            className="form-input"
-            type={type === "EMAIL" ? "email" : "text"}
-            value={target}
-            onChange={(event) => { setTarget(event.target.value); setError(""); }}
-            placeholder={selectedType.placeholder}
-            autoFocus
-            required
-          />
-          <p className="form-hint">
-            {type === "EMAIL" && "Checks breach exposure. Email scanning requires a configured HIBP API key."}
-            {type === "DOMAIN" && "Enter a domain name or an HTTP(S) URL to check its certificate exposure."}
-            {type === "REPOSITORY" && "Enter a repository as owner/repository or paste its GitHub URL."}
-          </p>
-          <label className="form-label" htmlFor="asset-name">Display name <span className="optional-label">(optional)</span></label>
-          <input
-            id="asset-name"
-            className="form-input"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Production website"
-            maxLength={120}
-          />
-          {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="btn btn-primary auth-submit" type="submit" disabled={!target.trim() || submitting}>
-            {submitting ? "Adding asset..." : "Add asset and scan"}
-          </button>
+          <div className="form-group">
+            <label className="form-label" htmlFor="asset-target">{selectedType.label}</label>
+            <input
+              id="asset-target"
+              className="form-input"
+              type={type === "EMAIL" ? "email" : "text"}
+              value={target}
+              onChange={(event) => { setTarget(event.target.value); setError(""); }}
+              placeholder={selectedType.placeholder}
+              autoFocus
+              required
+            />
+            <p className="form-hint">
+              {type === "EMAIL" && "Checks against data breach databases. Requires HIBP_API_KEY on the backend (or runs in demo mode)."}
+              {type === "DOMAIN" && "Inspects certificate trust, validity window, and RSA bit length over live port 443 TLS handshake."}
+              {type === "REPOSITORY" && "Inspects public git trees for tracked secrets, private keys, and environment files without cloning."}
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="asset-name">
+              Friendly Display Name <span className="optional-label">(optional)</span>
+            </label>
+            <input
+              id="asset-name"
+              className="form-input"
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Production API Gateway"
+              maxLength={120}
+            />
+          </div>
+
+          {error && <div className="notice notice-error" role="alert">{error}</div>}
+
+          <div className="form-actions-row">
+            <button
+              className="btn btn-primary auth-submit"
+              type="submit"
+              disabled={!target.trim() || submitting}
+            >
+              {submitting ? "Registering & initiating scan..." : "Add asset and scan now"}
+            </button>
+          </div>
         </form>
       </section>
     </div>

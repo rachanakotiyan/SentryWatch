@@ -1,15 +1,17 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
+import ThemeToggle from "./ThemeToggle";
 
 const links = [
-  { to: "/", label: "Dashboard", icon: "▦", end: true },
-  { to: "/assets/new", label: "Add Asset", icon: "+" },
-  { to: "/alerts", label: "Alert Feed", icon: "△" },
+  { to: "/app", label: "Dashboard", icon: "▦", end: true },
+  { to: "/app/assets/new", label: "Add Asset", icon: "+" },
+  { to: "/app/alerts", label: "Alert Feed", icon: "△" },
 ];
 
 export default function Navbar({ openAlertsCount = 0 }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
   const signOut = () => {
     logout();
     navigate("/login", { replace: true });
@@ -35,14 +37,30 @@ export default function Navbar({ openAlertsCount = 0 }) {
   return (
     <>
       <aside className="sidebar">
-        <div className="brand"><div className="brand-icon">S</div><span className="brand-name">SentryWatch</span></div>
-        <nav className="nav-menu" aria-label="Main navigation">{renderLinks()}</nav>
+        <Link to="/" className="brand" title="SentryWatch Home">
+          <div className="brand-icon">S</div>
+          <span className="brand-name">SentryWatch</span>
+        </Link>
+
+        <nav className="nav-menu" aria-label="Main navigation">
+          {renderLinks()}
+        </nav>
+
         <div className="sidebar-footer">
-          <span title={user?.email}>{user?.email || "Signed in"}</span>
-          <button type="button" className="sign-out-button" onClick={signOut}>Sign out</button>
+          <div className="sidebar-theme-row">
+            <span>Theme:</span>
+            <ThemeToggle />
+          </div>
+          <span className="user-email-text" title={user?.email}>{user?.email || "Signed in"}</span>
+          <button type="button" className="sign-out-button" onClick={signOut}>
+            Sign out &rarr;
+          </button>
         </div>
       </aside>
-      <nav className="mobile-nav" aria-label="Mobile navigation">{renderLinks(true)}</nav>
+
+      <nav className="mobile-nav" aria-label="Mobile navigation">
+        {renderLinks(true)}
+      </nav>
     </>
   );
 }

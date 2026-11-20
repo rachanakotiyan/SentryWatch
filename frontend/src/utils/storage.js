@@ -56,9 +56,36 @@ export async function resolveAlert(id, resolved = true) {
   return data.alert;
 }
 
+export async function getHealth() {
+  try {
+    const { data } = await api.get("/health");
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export function getErrorMessage(error, fallback = "Something went wrong. Please try again.") {
   if (error.response?.status === 429) {
     return "Too many requests. Please wait a moment and try again.";
   }
   return error.response?.data?.error || fallback;
+}
+
+export function formatRelativeTime(dateString) {
+  if (!dateString) return "Never";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - date) / 1000);
+
+  if (diffInSeconds < 30) return "Just now";
+  if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) return `${diffInDays}d ago`;
+  return date.toLocaleDateString();
 }
