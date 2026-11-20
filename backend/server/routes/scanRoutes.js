@@ -1,306 +1,71 @@
 import express from 'express';
-import axios from 'axios';
-import process from 'node:process';
+import { scanDomain } from '../services/sslService.js';
+import { scanRepository } from '../services/githubService.js';
+import { scanEmail, pwnedPasswordCount } from '../services/hibpService.js';
+import { calculateRiskScore, assetStatus } from '../services/riskScore.js';
+import { ScanError } from '../services/scanError.js';
 
-const router = express.Router();
+export const defaultScanners = {
+  DOMAIN: scanDomain,
+  REPOSITORY: scanRepository,
+  EMAIL: scanEmail,
+};
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const HIBP_KEY = process.env.HIBP_API_KEY;
+export default function scanRoutes(store, scanners = defaultScanners) {
+  const router = express.Router();
+  const running = new Set(); // one scan per asset at a time (protects third-party rate limits)
 
-/**
- * POST /api/scan/email
- * Expects: { value: "email@address.com" }
- * Returns: Array of normalized alerts
- */
-router.post('/api/scan/email', async (req, res) => {
-  const { value } = req.body || {};
-  if (!value) {
-    return res.status(400).json({ error: 'Email value is required' });
-  }
+  // POST /api/scans/password-check  { password }  -> k-anonymity lookup, only a 5-char hash prefix leaves the server
+  router.post('/password-check', async (req, res, next) => {
+    try {
+      const { password } = req.body || {};
+      if (typeof password !== 'string' || !password) return res.status(400).json({ error: 'password is required' });
+      const count = await pwnedPasswordCount(password);
+      res.json({ pwned: count > 0, count });
+    } catch (err) { next(err); }
+  });
 
-  const email = value.trim();
-  const lowercaseEmail = email.toLowerCase();
-  
-  // Custom demo mode triggers
-  const isCleanDemo = lowercaseEmail.includes('clean') || lowercaseEmail.includes('safe');
+  // POST /api/scans/:assetId - run the scanner for the asset's type, score it, store scan + alerts
+  router.post('/:assetId', async (req, res, next) => {
+    let asset;
+    try {
+      asset = await store.assets.findOwned(req.params.assetId, req.user.id);
+      if (!asset) return res.status(404).json({ error: 'Asset not found' });
+      if (running.has(asset.id)) return res.status(409).json({ error: 'A scan is already running for this asset' });
 
-  // Fallback if HIBP Key is not present or if it is a clean demo trigger
-  if (!HIBP_KEY) {
-    console.log(`[Email Scan] No HIBP API Key, using demo data. Email: ${email}`);
-    if (isCleanDemo) {
-      return res.json([]);
+      const scanner = scanners[asset.type];
+      if (!scanner) throw new ScanError(`No scanner for asset type ${asset.type}`, 501);
+
+      running.add(asset.id);
+      const { findings, telemetry } = await scanner(asset.target);
+
+      const riskScore = calculateRiskScore(findings);
+      const status = assetStatus(findings);
+      const scan = await store.scans.create({
+        assetId: asset.id,
+        passed: findings.length === 0,
+        riskScore,
+        payload: { telemetry, findingCount: findings.length },
+      });
+      const alerts = await store.alerts.replaceOpenForAsset(asset.id, findings);
+      const updated = await store.assets.update(asset.id, { status, lastScanned: scan.scannedAt });
+
+      res.status(201).json({ scan, riskScore, status, alerts, asset: updated, demo: telemetry?.demo === true });
+    } catch (err) {
+      next(err);
+    } finally {
+      if (asset) running.delete(asset.id);
     }
-    
-    // Return mock breach alerts
-    return res.json([
-      {
-        type: 'email',
-        severity: 'HIGH',
-        title: '[DEMO] Adobe Account Breach',
-        description: `The email address '${email}' was identified in the Adobe database compromise (October 2013). Compromised info: Usernames, Email addresses, Passwords, Password hints. We recommend changing passwords on all systems using this email.`,
-        foundAt: 'Adobe (Mock)',
-        resolved: false,
-        timestamp: new Date().toISOString()
-      },
-      {
-        type: 'email',
-        severity: 'MEDIUM',
-        title: '[DEMO] Canva Account Exposure',
-        description: `The email address '${email}' was found in the Canva database leak (May 2019). Compromised info: Names, Usernames, Email addresses, Passwords. Enable Multi-Factor Authentication (MFA) on your account.`,
-        foundAt: 'Canva (Mock)',
-        resolved: false,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-  }
+  });
 
-  // Real API scan
-  // TODO: plug in a real HIBP API key in the environment variables to check live breaches.
-  const url = `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`;
+  // GET /api/scans/:assetId - scan history, newest first
+  router.get('/:assetId', async (req, res, next) => {
+    try {
+      const asset = await store.assets.findOwned(req.params.assetId, req.user.id);
+      if (!asset) return res.status(404).json({ error: 'Asset not found' });
+      res.json({ scans: await store.scans.listByAsset(asset.id) });
+    } catch (err) { next(err); }
+  });
 
-  try {
-    const response = await axios.get(url, {
-      headers: {
-        'hibp-api-key': HIBP_KEY,
-        'User-Agent': 'SentryWatch',
-      },
-    });
-
-    const breaches = Array.isArray(response.data) ? response.data : [];
-    const alerts = breaches.map(b => ({
-      type: 'email',
-      severity: b.DataClasses.includes('Passwords') ? 'HIGH' : 'MEDIUM',
-      title: `Account Breached in ${b.Title}`,
-      description: `Email address was exposed in the ${b.Title} breach (${b.BreachDate}). Compromised data: ${b.DataClasses.join(', ')}. ${b.Description.replace(/<\/?[^>]+(>|$)/g, "")}`,
-      foundAt: b.Name,
-      resolved: false,
-      timestamp: new Date().toISOString()
-    }));
-
-    return res.json(alerts);
-  } catch (err) {
-    if (err.response && err.response.status === 404) {
-      return res.json([]); // Not found = no breaches
-    }
-    console.error('HIBP lookup error', err?.response?.status || err.message);
-    
-    // In case the real API fails (rate limits or block), fallback to demo mode so app stays demoable
-    return res.json([
-      {
-        type: 'email',
-        severity: 'HIGH',
-        title: '[DEMO] Fallback: Adobe Breach Warning',
-        description: `The real HIBP query failed. Showing demo findings: Email '${email}' was historically compromised in Adobe data breach.`,
-        foundAt: 'HIBP (Mock Fallback)',
-        resolved: false,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-  }
-});
-
-/**
- * POST /api/scan/domain
- * Expects: { value: "domain.com" }
- * Returns: Array of normalized alerts
- */
-router.post('/api/scan/domain', async (req, res) => {
-  const { value } = req.body || {};
-  if (!value) {
-    return res.status(400).json({ error: 'Domain value is required' });
-  }
-
-  const domain = value.trim().toLowerCase();
-  const isCleanDemo = domain.includes('clean') || domain.includes('safe');
-
-  try {
-    // Call crt.sh for real SSL cert data
-    const response = await axios.get(`https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`, {
-      timeout: 8000 // crt.sh can be extremely slow
-    });
-
-    const certs = response.data;
-    if (!Array.isArray(certs) || certs.length === 0) {
-      return res.json([]);
-    }
-
-    // Sort or get latest cert
-    const latest = certs[0];
-    if (!latest || !latest.not_after) {
-      return res.json([]);
-    }
-
-    const expiryDate = new Date(latest.not_after);
-    const daysLeft = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
-
-    if (daysLeft < 30) {
-      const severity = daysLeft <= 0 ? 'CRITICAL' : (daysLeft < 10 ? 'HIGH' : 'MEDIUM');
-      const statusText = daysLeft <= 0 ? 'expired' : `expires in ${daysLeft} days`;
-      
-      return res.json([
-        {
-          type: 'domain',
-          severity: severity,
-          title: `SSL Certificate ${daysLeft <= 0 ? 'Expired' : 'Expiring Soon'}`,
-          description: `The SSL certificate for domain '${domain}' is ${statusText} (Expiry: ${expiryDate.toLocaleDateString()}). A renewed certificate must be installed immediately to maintain secure traffic.`,
-          foundAt: latest.issuer_name || 'crt.sh',
-          resolved: false,
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    }
-
-    return res.json([]); // Clean!
-  } catch (err) {
-    console.warn('crt.sh query failed or timed out for domain', domain, err.message);
-
-    // Fallback if crt.sh fails or times out
-    if (isCleanDemo) {
-      return res.json([]);
-    }
-
-    // Default demo behavior: if domain is example.com or contains expire/warn, trigger an alert
-    const isExpiringMock = domain.includes('expire') || domain.includes('warn') || domain === 'example.com' || domain.includes('test');
-    
-    if (isExpiringMock) {
-      return res.json([
-        {
-          type: 'domain',
-          severity: 'HIGH',
-          title: '[DEMO] SSL Certificate Expiring Soon',
-          description: `SSL certificate for domain '${domain}' is expiring in 12 days (Mock Expiry). Active renewal is required to prevent browser security warnings.`,
-          foundAt: "Let's Encrypt (Mock)",
-          resolved: false,
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    }
-    
-    return res.json([]);
-  }
-});
-
-/**
- * POST /api/scan/github
- * Expects: { value: "github_org_or_username" }
- * Returns: Array of normalized alerts
- */
-router.post('/api/scan/github', async (req, res) => {
-  const { value } = req.body || {};
-  if (!value) {
-    return res.status(400).json({ error: 'GitHub target is required' });
-  }
-
-  const target = value.trim();
-  const lowercaseTarget = target.toLowerCase();
-  const isCleanDemo = lowercaseTarget.includes('clean') || lowercaseTarget.includes('safe');
-
-  // Fallback to demo mode if GITHUB_TOKEN is not set or clean demo is triggered
-  if (!GITHUB_TOKEN) {
-    console.log(`[GitHub Scan] No GITHUB_TOKEN environment variable. Using mock findings. Target: ${target}`);
-    if (isCleanDemo) {
-      return res.json([]);
-    }
-
-    return res.json([
-      {
-        type: 'github',
-        severity: 'CRITICAL',
-        title: '[DEMO] AWS Credentials Exposure',
-        description: `Found a potential AWS Access Key ID (AKIA...) in file 'config/aws.yml' under repository '${target}/cloud-infra'. Exposed keys allow unauthorized root control of cloud assets.`,
-        foundAt: `https://github.com/${target}/cloud-infra/blob/main/config/aws.yml`,
-        resolved: false,
-        timestamp: new Date().toISOString()
-      },
-      {
-        type: 'github',
-        severity: 'HIGH',
-        title: '[DEMO] Exposed GitHub Access Token',
-        description: `Found a potential Personal Access Token (ghp_...) in file 'scripts/deploy.js' under repository '${target}/utilities'. This allows external read/write repository access.`,
-        foundAt: `https://github.com/${target}/utilities/blob/main/scripts/deploy.js`,
-        resolved: false,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-  }
-
-  // Real API scan
-  // Note: GitHub search API rate limits unauthenticated requests to 10/min, and authenticated to 30/min.
-  const patterns = [
-    { name: 'AWS Access Key', q: 'AKIA' },
-    { name: 'GitHub Token', q: 'ghp_' },
-    { name: 'Private Key', q: '-----BEGIN PRIVATE KEY-----' },
-    { name: 'API Key', q: 'api_key=' },
-    { name: 'Client Secret', q: 'client_secret' },
-  ];
-
-  const findings = [];
-  const headers = { Accept: 'application/vnd.github.v3+json' };
-  headers.Authorization = `token ${GITHUB_TOKEN}`;
-
-  try {
-    for (const p of patterns) {
-      const query = `${p.q} user:${target}`;
-      const url = `https://api.github.com/search/code?q=${encodeURIComponent(query)}&per_page=3`;
-      
-      try {
-        const response = await axios.get(url, { headers, timeout: 5000 });
-        if (response.data && Array.isArray(response.data.items)) {
-          for (const item of response.data.items) {
-            findings.push({
-              type: 'github',
-              severity: p.name.includes('Key') || p.name.includes('Token') || p.name.includes('Private') ? 'CRITICAL' : 'HIGH',
-              title: `Exposed ${p.name}`,
-              description: `Found potential secret matching '${p.q}' in repository '${item.repository?.full_name}' at path '${item.path}'.`,
-              foundAt: item.html_url || `https://github.com/${item.repository?.full_name}/blob/main/${item.path}`,
-              resolved: false,
-              timestamp: new Date().toISOString()
-            });
-          }
-        }
-        // Small delay to reduce hitting abuse limits
-        await new Promise(r => setTimeout(r, 500));
-      } catch (err) {
-        console.error(`GitHub API search failed for pattern ${p.name}:`, err.message);
-        if (err.response && err.response.status === 403) {
-          // Rate limited on real search, break loop and return what we have or fallback to mock
-          break;
-        }
-      }
-    }
-
-    // If real queries succeeded but rate limits blocked us mid-way and we found nothing,
-    // or if we hit rate limit on the first try, return mock data to prevent blocking prototype flow
-    if (findings.length === 0 && !isCleanDemo) {
-      // Just in case, return a mock demo alert so the UI functions as expected
-      return res.json([
-        {
-          type: 'github',
-          severity: 'HIGH',
-          title: '[DEMO] Hardcoded API Credentials',
-          description: `Scan completed but rate-limiting occurred or no live leaks were found. Mock exposure shown: found database API key in '${target}/backend/config.js'.`,
-          foundAt: `https://github.com/${target}/backend/blob/main/config.js`,
-          resolved: false,
-          timestamp: new Date().toISOString()
-        }
-      ]);
-    }
-
-    return res.json(findings);
-  } catch (err) {
-    console.error('GitHub overall scan error', err.message);
-    return res.json([
-      {
-        type: 'github',
-        severity: 'CRITICAL',
-        title: '[DEMO] GitHub API Error Fallback',
-        description: `GitHub query failed. Demonstrating mock finding: AWS Secret Key leak detected in '${target}/app/keys.json'.`,
-        foundAt: `https://github.com/${target}/app/keys.json`,
-        resolved: false,
-        timestamp: new Date().toISOString()
-      }
-    ]);
-  }
-});
-
-export default router;
+  return router;
+}

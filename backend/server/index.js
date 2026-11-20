@@ -1,24 +1,15 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import helmet from 'helmet';
+import 'dotenv/config';
+import process from 'node:process';
+import { createApp } from './app.js';
+import { createStore } from './config/store.js';
+import { getJwtSecret } from './config/env.js';
 
-import authRoutes from './routes/authRoutes.js';
-import assetRoutes from './routes/assetRoutes.js';
+const PORT = process.env.PORT || 5001;
 
-dotenv.config();
+getJwtSecret(); // fail fast / warn at startup rather than on first login
+const store = await createStore();
+console.log(`[storage] ${store.kind === 'mock' ? 'in-memory mock DB (data resets on restart)' : 'PostgreSQL via Prisma'}`);
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-
-// Mount authentication & asset API endpoints
-app.use('/api/auth', authRoutes);
-app.use('/api/assets', assetRoutes);
-
-app.listen(PORT, () => {
-  console.log(`[SentryWatch Backend] Running on http://localhost:${PORT}`);
+createApp({ store }).listen(PORT, () => {
+  console.log(`SentryWatch backend listening on http://localhost:${PORT}`);
 });
