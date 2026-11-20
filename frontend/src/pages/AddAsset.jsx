@@ -1,243 +1,139 @@
 import { useState } from "react";
-import { saveAsset } from "../utils/storage";
+import { useLocation, useNavigate } from "react-router-dom";
+import { createAsset, getErrorMessage } from "../utils/storage";
 
-export default function AddAsset({ refreshData, navigateToScanResult }) {
-  const [activeTab, setActiveTab] = useState("email"); // email, domain, github
-  const [inputValue, setInputValue] = useState("");
-  const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const types = [
+  { value: "EMAIL", label: "Email Address", placeholder: "security-team@company.com" },
+  { value: "DOMAIN", label: "Domain / URL", placeholder: "company.com or https://company.com" },
+  { value: "REPOSITORY", label: "GitHub Repository", placeholder: "owner/repository or github.com/owner/repository" },
+];
 
-  // Validation patterns
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
-  const githubRegex = /^[a-zA-Z0-9-]{1,39}$/; // GitHub username: max 39 chars, alphanumeric, hyphens
+function validateTarget(type, input) {
+  const target = input.trim();
+  if (!target) return "This field is required.";
 
-  const validate = (type, val) => {
-    if (!val) {
-      return "This field is required";
+  if (type === "EMAIL" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
+    return "Enter a valid email address.";
+  }
+
+  if (type === "DOMAIN") {
+    try {
+      const url = new URL(/^https?:\/\//i.test(target) ? target : `https://${target}`);
+      if (!["http:", "https:"].includes(url.protocol) || !url.hostname.includes(".") || url.username || url.password) {
+        return "Enter a valid domain or HTTP(S) URL.";
+      }
+    } catch {
+      return "Enter a valid domain or HTTP(S) URL.";
     }
-    
-    const trimmedVal = val.trim();
-    if (type === "email") {
-      if (!emailRegex.test(trimmedVal)) {
-        return "Please enter a valid email address (e.g. user@company.com)";
-      }
-    } else if (type === "domain") {
-      if (!domainRegex.test(trimmedVal)) {
-        return "Please enter a valid domain (e.g. company.com)";
-      }
-    } else if (type === "github") {
-      if (!githubRegex.test(trimmedVal)) {
-        return "Valid characters: letters, numbers, and hyphens (max 39 characters)";
-      }
-    }
-    return "";
-  };
+  }
 
-  const handleInputChange = (e) => {
-    const val = e.target.value;
-    setInputValue(val);
-    if (val) {
-      setError(validate(activeTab, val));
+  if (type === "REPOSITORY") {
+    let path = target;
+    if (/^https?:\/\//i.test(path)) {
+      try {
+        const url = new URL(path);
+        if (url.hostname.toLowerCase() !== "github.com") return "Enter a GitHub repository URL or owner/repository.";
+        path = url.pathname.replace(/^\/|\/$/g, "");
+      } catch {
+        return "Enter a valid GitHub repository URL or owner/repository.";
+      }
     } else {
-      setError("");
+      path = path.replace(/^github\.com\//i, "").replace(/\/$/g, "");
     }
-  };
+    const parts = path.replace(/\.git$/i, "").split("/");
+    if (parts.length !== 2 || parts.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part))) {
+      return "Enter a repository as owner/repository or a GitHub repository URL.";
+    }
+  }
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setInputValue("");
-    setError("");
-  };
+  return "";
+}
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const validationError = validate(activeTab, inputValue);
+export default function AddAsset({ refreshData }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [type, setType] = useState("EMAIL");
+  const [target, setTarget] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const selectedType = types.find((item) => item.value === type);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const validationError = validateTarget(type, target);
     if (validationError) {
       setError(validationError);
       return;
     }
 
-    setIsSubmitting(true);
-
+    setError("");
+    setSubmitting(true);
     try {
-      const assetToSave = {
-        type: activeTab,
-        value: inputValue.trim(),
-        email: activeTab === "email" ? inputValue.trim() : null,
-        domain: activeTab === "domain" ? inputValue.trim() : null,
-        githubOrg: activeTab === "github" ? inputValue.trim() : null,
-      };
-
-      const savedAsset = saveAsset(assetToSave);
-      refreshData();
-      
-      // Navigate directly to the scan result page for this asset to run the initial scan
-      navigateToScanResult(savedAsset.id);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to save asset. Please try again.");
-      setIsSubmitting(false);
+      const asset = await createAsset({ type, target: target.trim(), ...(name.trim() ? { name: name.trim() } : {}) });
+      await refreshData();
+      navigate(`/assets/${asset.id}`, { state: { scanImmediately: true, from: location.pathname } });
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Could not add this asset."));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="anim-fade-in" style={{ maxWidth: 580, margin: "0 auto", padding: "10px 0" }}>
-      <header style={{ marginBottom: 32 }}>
-        <h1 style={{ marginBottom: 8 }}>Monitor Asset</h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: 16 }}>
-          Register a digital asset to monitor external leaks, compromised credentials, and SSL security vulnerabilities.
-        </p>
+    <div className="anim-fade-in add-asset-page">
+      <header className="page-heading">
+        <h1>Monitor an asset</h1>
+        <p>Register an email, domain, or GitHub repository to start monitoring its exposure.</p>
       </header>
-
-      <div className="card" style={{ padding: 32 }}>
-        {/* Tab Selector */}
-        <div style={{
-          display: "flex",
-          backgroundColor: "var(--bg-hover)",
-          padding: 4,
-          borderRadius: 8,
-          border: "1px solid var(--border-color)",
-          marginBottom: 28
-        }}>
-          <button
-            type="button"
-            className="tab-btn"
-            style={{
-              flex: 1,
-              background: activeTab === "email" ? "var(--bg-panel)" : "none",
-              border: "none",
-              padding: "10px 16px",
-              fontWeight: activeTab === "email" ? 600 : 500,
-              fontSize: 14,
-              color: activeTab === "email" ? "var(--text-primary)" : "var(--text-secondary)",
-              borderRadius: 6,
-              cursor: "pointer",
-              boxShadow: activeTab === "email" ? "var(--shadow-sm)" : "none",
-              transition: "all 0.2s ease"
-            }}
-            onClick={() => handleTabChange("email")}
-          >
-            Email Address
-          </button>
-          
-          <button
-            type="button"
-            className="tab-btn"
-            style={{
-              flex: 1,
-              background: activeTab === "domain" ? "var(--bg-panel)" : "none",
-              border: "none",
-              padding: "10px 16px",
-              fontWeight: activeTab === "domain" ? 600 : 500,
-              fontSize: 14,
-              color: activeTab === "domain" ? "var(--text-primary)" : "var(--text-secondary)",
-              borderRadius: 6,
-              cursor: "pointer",
-              boxShadow: activeTab === "domain" ? "var(--shadow-sm)" : "none",
-              transition: "all 0.2s ease"
-            }}
-            onClick={() => handleTabChange("domain")}
-          >
-            Domain Name
-          </button>
-          
-          <button
-            type="button"
-            className="tab-btn"
-            style={{
-              flex: 1,
-              background: activeTab === "github" ? "var(--bg-panel)" : "none",
-              border: "none",
-              padding: "10px 16px",
-              fontWeight: activeTab === "github" ? 600 : 500,
-              fontSize: 14,
-              color: activeTab === "github" ? "var(--text-primary)" : "var(--text-secondary)",
-              borderRadius: 6,
-              cursor: "pointer",
-              boxShadow: activeTab === "github" ? "var(--shadow-sm)" : "none",
-              transition: "all 0.2s ease"
-            }}
-            onClick={() => handleTabChange("github")}
-          >
-            GitHub Org
-          </button>
+      <section className="card add-asset-card">
+        <div className="asset-type-tabs" role="tablist" aria-label="Asset type">
+          {types.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              role="tab"
+              aria-selected={type === item.value}
+              className={`asset-type-tab${type === item.value ? " active" : ""}`}
+              onClick={() => { setType(item.value); setError(""); }}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
-
-        {/* Input Form */}
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ marginBottom: 24, textAlign: "left" }}>
-            <label style={{ 
-              display: "block", 
-              fontSize: 14, 
-              fontWeight: 600, 
-              marginBottom: 8, 
-              color: "var(--text-primary)" 
-            }}>
-              {activeTab === "email" && "Email Address"}
-              {activeTab === "domain" && "Domain Name"}
-              {activeTab === "github" && "GitHub Org or Account"}
-            </label>
-            
-            <input
-              type={activeTab === "email" ? "email" : "text"}
-              value={inputValue}
-              onChange={handleInputChange}
-              placeholder={
-                activeTab === "email" ? "security-team@company.com" :
-                activeTab === "domain" ? "company.com" : "demo"
-              }
-              style={{
-                width: "100%",
-                padding: "12px 16px",
-                fontSize: 15,
-                borderRadius: 8,
-                border: error ? "1.5px solid var(--severity-critical)" : "1px solid var(--border-color)",
-                backgroundColor: "var(--bg-panel)",
-                color: "var(--text-primary)",
-                transition: "all 0.2s ease"
-              }}
-              autoFocus
-            />
-            
-            {/* Context/Help Messages */}
-            <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-secondary)" }}>
-              {activeTab === "email" && "Checks the HaveIBeenPwned database to identify if this email was compromised in public data breaches."}
-              {activeTab === "domain" && "Scans SSL logs (crt.sh) for valid certificates and reports warning if expiration is within 30 days."}
-              {activeTab === "github" && "Searches public codebases via the GitHub search API for exposed authentication keys, tokens, or API credentials."}
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div style={{ 
-                color: "var(--severity-critical)", 
-                fontSize: 13, 
-                fontWeight: 500, 
-                marginTop: 8,
-                display: "flex",
-                alignItems: "center",
-                gap: 6
-              }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="12"></line>
-                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                </svg>
-                {error}
-              </div>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={!inputValue || !!error || isSubmitting}
-            style={{ width: "100%", padding: "14px", fontSize: 15 }}
-          >
-            {isSubmitting ? "Processing..." : "Register and Initiate Scan"}
+          <label className="form-label" htmlFor="asset-target">{selectedType.label}</label>
+          <input
+            id="asset-target"
+            className="form-input"
+            type={type === "EMAIL" ? "email" : "text"}
+            value={target}
+            onChange={(event) => { setTarget(event.target.value); setError(""); }}
+            placeholder={selectedType.placeholder}
+            autoFocus
+            required
+          />
+          <p className="form-hint">
+            {type === "EMAIL" && "Checks breach exposure. Email scanning requires a configured HIBP API key."}
+            {type === "DOMAIN" && "Enter a domain name or an HTTP(S) URL to check its certificate exposure."}
+            {type === "REPOSITORY" && "Enter a repository as owner/repository or paste its GitHub URL."}
+          </p>
+          <label className="form-label" htmlFor="asset-name">Display name <span className="optional-label">(optional)</span></label>
+          <input
+            id="asset-name"
+            className="form-input"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Production website"
+            maxLength={120}
+          />
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button className="btn btn-primary auth-submit" type="submit" disabled={!target.trim() || submitting}>
+            {submitting ? "Adding asset..." : "Add asset and scan"}
           </button>
         </form>
-      </div>
+      </section>
     </div>
   );
 }

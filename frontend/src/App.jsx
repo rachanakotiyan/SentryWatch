@@ -1,197 +1,127 @@
-import { useState, useEffect } from "react";
-import Dashboard from "./pages/Dashboard";
+import { useCallback, useEffect, useState } from "react";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useOutletContext } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./context/AuthContext";
 import AddAsset from "./pages/AddAsset";
 import Alerts from "./pages/Alerts";
+import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import ScanResult from "./pages/ScanResult";
-import { getAssets, getAlerts } from "./utils/storage";
+import { getAlerts, getAssets, getErrorMessage } from "./utils/storage";
 
-function App() {
-  const [currentTab, setCurrentTab] = useState("dashboard"); // dashboard, add-asset, alerts, scan-result
-  const [activeAssetId, setActiveAssetId] = useState(null);
+function AppShell() {
   const [assets, setAssets] = useState([]);
   const [alerts, setAlerts] = useState([]);
-  
-  // Track resolved count this session (using sessionStorage to persist across refreshes)
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [resolvedThisSession, setResolvedThisSession] = useState(() => {
-    const val = sessionStorage.getItem("sw_resolved_this_session");
-    return val ? parseInt(val, 10) : 0;
+    const count = Number(sessionStorage.getItem("sw_resolved_this_session"));
+    return Number.isFinite(count) ? count : 0;
   });
 
-  // Load and sync data initially and define a central refresh mechanism
-  const refreshData = () => {
-    setAssets(getAssets());
-    setAlerts(getAlerts());
-  };
-
-  useEffect(() => {
-    refreshData();
-    
-    // Periodically sync to handle other tab/refresh events if any
-    const interval = setInterval(refreshData, 2000);
-    return () => clearInterval(interval);
+  const refreshData = useCallback(async () => {
+    const [nextAssets, nextAlerts] = await Promise.all([getAssets(), getAlerts()]);
+    setAssets(nextAssets);
+    setAlerts(nextAlerts);
+    setLoadError("");
+    setLoading(false);
   }, []);
 
-  const incrementResolvedThisSession = () => {
-    setResolvedThisSession(prev => {
-      const next = prev + 1;
-      sessionStorage.setItem("sw_resolved_this_session", next.toString());
+  useEffect(() => {
+    let active = true;
+    Promise.all([getAssets(), getAlerts()])
+      .then(([nextAssets, nextAlerts]) => {
+        if (!active) return;
+        setAssets(nextAssets);
+        setAlerts(nextAlerts);
+      })
+      .catch((error) => {
+        if (active) setLoadError(getErrorMessage(error, "Unable to load your monitoring data."));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const incrementResolved = () => {
+    setResolvedThisSession((current) => {
+      const next = current + 1;
+      sessionStorage.setItem("sw_resolved_this_session", String(next));
       return next;
     });
   };
 
-  const openAlertsCount = alerts.filter(a => !a.resolved).length;
-
-  const navigateToScanResult = (assetId) => {
-    setActiveAssetId(assetId);
-    setCurrentTab("scan-result");
-  };
+  const openAlertsCount = alerts.filter((alert) => !alert.resolved).length;
 
   return (
     <div className="app-container">
-      {/* Sidebar Navigation - Desktop */}
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-icon">S</div>
-          <span className="brand-name">SentryWatch</span>
-        </div>
-        
-        <nav className="nav-menu">
-          <li className="nav-item">
-            <button 
-              className={`nav-link ${currentTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('dashboard')}
-            >
-              <div className="nav-link-content">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="3" width="7" height="7"></rect>
-                  <rect x="14" y="14" width="7" height="7"></rect>
-                  <rect x="3" y="14" width="7" height="7"></rect>
-                </svg>
-                <span>Dashboard</span>
-              </div>
-            </button>
-          </li>
-          
-          <li className="nav-item">
-            <button 
-              className={`nav-link ${currentTab === 'add-asset' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('add-asset')}
-            >
-              <div className="nav-link-content">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="16"></line>
-                  <line x1="8" y1="12" x2="16" y2="12"></line>
-                </svg>
-                <span>Add Asset</span>
-              </div>
-            </button>
-          </li>
-          
-          <li className="nav-item">
-            <button 
-              className={`nav-link ${currentTab === 'alerts' ? 'active' : ''}`}
-              onClick={() => setCurrentTab('alerts')}
-            >
-              <div className="nav-link-content">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                  <line x1="12" y1="9" x2="12" y2="13"></line>
-                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
-                <span>Alert Feed</span>
-              </div>
-              {openAlertsCount > 0 && <span className="nav-badge">{openAlertsCount}</span>}
-            </button>
-          </li>
-        </nav>
-        
-        <div className="sidebar-footer">
-          <div>SentryWatch Sentinel v1.0</div>
-          <div>Local Persistence Mode</div>
-        </div>
-      </aside>
-
-      {/* Bottom Navigation - Mobile */}
-      <nav className="mobile-nav">
-        <button 
-          className={`mobile-nav-link ${currentTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('dashboard')}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7"></rect>
-            <rect x="14" y="3" width="7" height="7"></rect>
-            <rect x="14" y="14" width="7" height="7"></rect>
-            <rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          <span>Dashboard</span>
-        </button>
-        
-        <button 
-          className={`mobile-nav-link ${currentTab === 'add-asset' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('add-asset')}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="8" x2="12" y2="16"></line>
-            <line x1="8" y1="12" x2="16" y2="12"></line>
-          </svg>
-          <span>Add Asset</span>
-        </button>
-        
-        <button 
-          className={`mobile-nav-link ${currentTab === 'alerts' ? 'active' : ''}`}
-          onClick={() => setCurrentTab('alerts')}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          <span>Alerts</span>
-          {openAlertsCount > 0 && <span className="mobile-badge">{openAlertsCount}</span>}
-        </button>
-      </nav>
-
-      {/* Main Content Pane */}
+      <Navbar openAlertsCount={openAlertsCount} />
       <main className="main-content">
-        {currentTab === 'dashboard' && (
-          <Dashboard 
-            assets={assets} 
-            refreshData={refreshData}
-            resolvedThisSession={resolvedThisSession}
-            navigateToScanResult={navigateToScanResult}
-            navigateToTab={setCurrentTab}
-          />
-        )}
-        
-        {currentTab === 'add-asset' && (
-          <AddAsset 
-            refreshData={refreshData}
-            navigateToScanResult={navigateToScanResult}
-          />
-        )}
-        
-        {currentTab === 'alerts' && (
-          <Alerts 
-            alerts={alerts}
-            refreshData={refreshData}
-            incrementResolved={incrementResolvedThisSession}
-          />
-        )}
-        
-        {currentTab === 'scan-result' && (
-          <ScanResult 
-            assetId={activeAssetId}
-            refreshData={refreshData}
-            navigateTo={setCurrentTab}
-            navigateToScanResult={navigateToScanResult}
-          />
+        {loadError && <div className="notice notice-error" role="alert">{loadError}</div>}
+        {loading ? (
+          <div className="card loading-card" role="status">Loading your SentryWatch workspace...</div>
+        ) : (
+          <Outlet context={{
+            assets,
+            alerts,
+            refreshData,
+            resolvedThisSession,
+            incrementResolved,
+          }} />
         )}
       </main>
     </div>
   );
 }
 
-export default App;
+function RoutedDashboard() {
+  const { assets, alerts, refreshData, resolvedThisSession } = useOutletContext();
+  return (
+    <Dashboard
+      assets={assets}
+      alerts={alerts}
+      refreshData={refreshData}
+      resolvedThisSession={resolvedThisSession}
+    />
+  );
+}
+
+function RoutedAddAsset() {
+  const { refreshData } = useOutletContext();
+  return <AddAsset refreshData={refreshData} />;
+}
+
+function RoutedAlerts() {
+  const { assets, alerts, refreshData, incrementResolved } = useOutletContext();
+  return <Alerts assets={assets} alerts={alerts} refreshData={refreshData} incrementResolved={incrementResolved} />;
+}
+
+function RoutedScanResult() {
+  const { assets, alerts, refreshData } = useOutletContext();
+  return <ScanResult assets={assets} alerts={alerts} refreshData={refreshData} />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route index element={<RoutedDashboard />} />
+              <Route path="assets/new" element={<RoutedAddAsset />} />
+              <Route path="assets/:assetId" element={<RoutedScanResult />} />
+              <Route path="alerts" element={<RoutedAlerts />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

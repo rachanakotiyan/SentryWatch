@@ -1,231 +1,120 @@
 import { useState } from "react";
-import { resolveAlert, deleteAlert } from "../utils/storage";
+import AlertBadge from "../components/AlertBadge";
+import { getErrorMessage, resolveAlert } from "../utils/storage";
 
-export default function Alerts({ alerts, refreshData, incrementResolved }) {
-  const [severityFilter, setSeverityFilter] = useState("ALL"); // ALL, CRITICAL, HIGH, MEDIUM, LOW
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL, OPEN, RESOLVED
+const severities = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"];
+const statuses = ["ALL", "OPEN", "RESOLVED"];
+
+export default function Alerts({ assets, alerts, refreshData, incrementResolved }) {
+  const [severityFilter, setSeverityFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [expandedId, setExpandedId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
 
-  const handleResolve = (id) => {
-    resolveAlert(id);
-    incrementResolved();
-    refreshData();
-  };
+  const filteredAlerts = alerts
+    .filter((alert) => severityFilter === "ALL" || alert.severity === severityFilter)
+    .filter((alert) => statusFilter === "ALL" || (statusFilter === "OPEN" ? !alert.resolved : alert.resolved))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to permanently delete this alert log?")) {
-      deleteAlert(id);
-      refreshData();
+  const handleResolve = async (alert) => {
+    setError("");
+    setBusyId(alert.id);
+    try {
+      await resolveAlert(alert.id, true);
+      incrementResolved();
+      await refreshData();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, "Could not update this alert."));
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const toggleExpand = (id) => {
-    setExpandedId(prev => prev === id ? null : id);
-  };
-
-  // Filter logic
-  const filteredAlerts = alerts.filter((a) => {
-    const matchSeverity = severityFilter === "ALL" || a.severity === severityFilter;
-    const matchStatus = 
-      statusFilter === "ALL" || 
-      (statusFilter === "OPEN" && !a.resolved) || 
-      (statusFilter === "RESOLVED" && a.resolved);
-    return matchSeverity && matchStatus;
-  });
-
-  const getSeverityBadgeClass = (s) => {
-    return `badge badge-${s.toLowerCase()}`;
-  };
+  const filterButtons = (values, active, onChange, label) => (
+    <div className="filter-row">
+      <span className="filter-label">{label}</span>
+      <div className="filter-options">
+        {values.map((value) => (
+          <button
+            className={`filter-button${active === value ? " active" : ""}`}
+            type="button"
+            key={value}
+            aria-pressed={active === value}
+            onClick={() => onChange(value)}
+          >
+            {value === "ALL" ? `All ${label.toLowerCase()}` : value}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="anim-fade-in" style={{ textAlign: "left" }}>
-      <header style={{ marginBottom: 32 }}>
-        <h1 style={{ marginBottom: 4 }}>Vulnerability & Leak Alerts</h1>
-        <p style={{ color: "var(--text-secondary)", fontSize: 16 }}>
-          Historical list of credentials exposed, configuration vulnerabilities, and security risks.
-        </p>
+    <div className="anim-fade-in">
+      <header className="page-heading">
+        <h1>Vulnerability &amp; leak alerts</h1>
+        <p>Review detected exposures and track remediation across monitored assets.</p>
       </header>
 
-      {/* Filters Bar */}
-      <div className="card" style={{ padding: 20, marginBottom: 28, display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Severity Filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", minWidth: 90 }}>
-            Severity:
-          </span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((sev) => (
-              <button
-                key={sev}
-                className="btn"
-                style={{
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  borderRadius: 6,
-                  fontWeight: severityFilter === sev ? 600 : 500,
-                  backgroundColor: severityFilter === sev ? "var(--text-primary)" : "var(--bg-hover)",
-                  color: severityFilter === sev ? "var(--bg-panel)" : "var(--text-secondary)",
-                  border: "none",
-                  cursor: "pointer"
-                }}
-                onClick={() => setSeverityFilter(sev)}
-              >
-                {sev === "ALL" ? "All Severities" : sev}
-              </button>
-            ))}
-          </div>
-        </div>
+      {error && <div className="notice notice-error" role="alert">{error}</div>}
+      <section className="card alert-filters" aria-label="Alert filters">
+        {filterButtons(severities, severityFilter, setSeverityFilter, "Severity")}
+        {filterButtons(statuses, statusFilter, setStatusFilter, "Status")}
+      </section>
 
-        {/* Status Filters */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", minWidth: 90 }}>
-            Status:
-          </span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {["ALL", "OPEN", "RESOLVED"].map((stat) => (
-              <button
-                key={stat}
-                className="btn"
-                style={{
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  borderRadius: 6,
-                  fontWeight: statusFilter === stat ? 600 : 500,
-                  backgroundColor: statusFilter === stat ? "var(--text-primary)" : "var(--bg-hover)",
-                  color: statusFilter === stat ? "var(--bg-panel)" : "var(--text-secondary)",
-                  border: "none",
-                  cursor: "pointer"
-                }}
-                onClick={() => setStatusFilter(stat)}
-              >
-                {stat === "ALL" ? "All Status" : stat === "OPEN" ? "Open Alerts" : "Resolved Alerts"}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Alerts Feed */}
       {filteredAlerts.length === 0 ? (
-        <div className="card empty-state" style={{ padding: "48px 20px" }}>
+        <div className="card empty-state">
           <div className="empty-icon">🛡️</div>
           <h2 className="empty-title">No alerts found</h2>
           <p className="empty-desc">
-            {alerts.length === 0 
-              ? "You haven't recorded any scan alerts yet. Run a scan from the dashboard or add a new monitored asset." 
-              : "No alert history matches your selected severity and status filters."}
+            {alerts.length === 0 ? "Run a scan on a monitored asset to check for exposure." : "No alerts match the selected filters."}
           </p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {filteredAlerts.map((a) => (
-            <div key={a.id} className="card" style={{ 
-              padding: 0, 
-              overflow: "hidden",
-              opacity: a.resolved ? 0.75 : 1,
-              transition: "opacity 0.2s"
-            }}>
-              <div 
-                style={{ 
-                  padding: "16px 20px", 
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center",
-                  cursor: "pointer",
-                  userSelect: "none"
-                }}
-                onClick={() => toggleExpand(a.id)}
-              >
-                <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                  <span className={getSeverityBadgeClass(a.severity)}>
-                    {a.severity}
-                  </span>
-                  
-                  <div>
-                    <div style={{ 
-                      fontWeight: 600, 
-                      fontSize: 15,
-                      color: "var(--text-primary)",
-                      textDecoration: a.resolved ? "line-through" : "none"
-                    }}>
-                      {a.title}
-                    </div>
-                    
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                      Asset: <strong>{a.foundAt}</strong> • Detected: {new Date(a.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                  {!a.resolved && (
-                    <button 
-                      onClick={() => handleResolve(a.id)} 
+        <div className="alert-list">
+          {filteredAlerts.map((alert) => {
+            const asset = assets.find((item) => item.id === alert.assetId);
+            const expanded = expandedId === alert.id;
+            return (
+              <article className={`card alert-item${alert.resolved ? " resolved" : ""}`} key={alert.id}>
+                <div className="alert-item-header">
+                  <button
+                    className="alert-summary"
+                    type="button"
+                    aria-expanded={expanded}
+                    onClick={() => setExpandedId(expanded ? null : alert.id)}
+                  >
+                    <AlertBadge severity={alert.severity} />
+                    <span className="alert-summary-text">
+                      <strong>{alert.title}</strong>
+                      <small>
+                        Asset: {asset?.name || asset?.target || alert.assetId} · Detected: {new Date(alert.createdAt).toLocaleString()}
+                      </small>
+                    </span>
+                    <span className={`expand-indicator${expanded ? " expanded" : ""}`} aria-hidden="true">⌄</span>
+                  </button>
+                  {!alert.resolved && (
+                    <button
+                      type="button"
                       className="btn btn-success"
-                      style={{ padding: "6px 12px", fontSize: 12 }}
+                      disabled={busyId === alert.id}
+                      onClick={() => handleResolve(alert)}
                     >
-                      Resolve
+                      {busyId === alert.id ? "Saving..." : "Resolve"}
                     </button>
                   )}
-                  
-                  <button 
-                    onClick={() => handleDelete(a.id)} 
-                    className="btn btn-danger"
-                    style={{ padding: "6px 10px", fontSize: 12 }}
-                  >
-                    Delete
-                  </button>
-
-                  <span style={{ 
-                    fontSize: 14, 
-                    color: "var(--text-secondary)", 
-                    transform: expandedId === a.id ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                    display: "inline-block",
-                    padding: "4px 8px",
-                    cursor: "pointer"
-                  }}
-                  onClick={() => toggleExpand(a.id)}
-                  >
-                    ▼
-                  </span>
+                  {alert.resolved && <span className="resolved-label">Resolved</span>}
                 </div>
-              </div>
-
-              {expandedId === a.id && (
-                <div style={{ 
-                  padding: "0 20px 20px 20px", 
-                  borderTop: "1px solid var(--border-color)",
-                  backgroundColor: "var(--bg-hover)",
-                  fontSize: 14,
-                  lineHeight: 1.6
-                }}>
-                  <div style={{ marginTop: 14 }}>
-                    <strong>Exposure Data Details:</strong>
-                    <div style={{ 
-                      fontFamily: "var(--font-mono)", 
-                      fontSize: 13, 
-                      backgroundColor: "var(--bg-panel)", 
-                      padding: 12, 
-                      borderRadius: 6,
-                      marginTop: 6,
-                      border: "1px solid var(--border-color)",
-                      whiteSpace: "pre-wrap"
-                    }}>
-                      {a.description}
-                    </div>
+                {expanded && (
+                  <div className="alert-details">
+                    <strong>Details</strong>
+                    <p>{alert.details || "No additional details were provided."}</p>
                   </div>
-                  
-                  <div style={{ marginTop: 14, fontSize: 13, color: "var(--text-secondary)" }}>
-                    <strong>Why this matters:</strong>
-                    {a.type === "email" && " Compromised email accounts allow credentials to be targeted by malicious logins. Reset accounts and enable 2FA."}
-                    {a.type === "domain" && " Expiring SSL certificates cause connection security errors for users. Renew the certificate before it expires."}
-                    {a.type === "github" && " Hardcoded API keys or secret strings in public repositories allow unauthorized access to systems. Revoke and delete this credentials pattern."}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>

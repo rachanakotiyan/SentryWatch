@@ -1,74 +1,64 @@
-// Assets storage helpers
-export const getAssets = () => {
-  return JSON.parse(localStorage.getItem("sw_assets") || "[]");
-};
+import api from "../services/api";
 
-export const saveAsset = (asset) => {
-  const assets = getAssets();
-  const newAsset = {
-    ...asset,
-    id: Date.now(),
-    createdAt: new Date().toISOString(),
-    lastScan: null,
-    lastScanResult: null
-  };
-  assets.push(newAsset);
-  localStorage.setItem("sw_assets", JSON.stringify(assets));
-  return newAsset;
-};
+export async function register(email, password) {
+  const { data } = await api.post("/auth/register", { email, password });
+  return data;
+}
 
-export const deleteAsset = (id) => {
-  const assets = getAssets().filter(asset => asset.id !== id);
-  localStorage.setItem("sw_assets", JSON.stringify(assets));
+export async function login(email, password) {
+  const { data } = await api.post("/auth/login", { email, password });
+  return data;
+}
 
-  // Cascade delete alerts associated with this asset
-  const alerts = getAlerts().filter(alert => alert.assetId !== id);
-  localStorage.setItem("sw_alerts", JSON.stringify(alerts));
-};
+export async function getCurrentUser() {
+  const { data } = await api.get("/auth/me");
+  return data.user;
+}
 
-export const updateAsset = (id, updates) => {
-  const assets = getAssets().map(a => {
-    if (a.id === id) return { ...a, ...updates };
-    return a;
-  });
-  localStorage.setItem("sw_assets", JSON.stringify(assets));
-};
+export async function getAssets() {
+  const { data } = await api.get("/assets");
+  return data.assets;
+}
 
-// Alerts storage helpers
-export const getAlerts = () => {
-  const alerts = JSON.parse(localStorage.getItem("sw_alerts") || "[]");
-  // Sort by most recent by default (timestamp or createdAt)
-  return alerts.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt));
-};
+export async function createAsset(asset) {
+  const { data } = await api.post("/assets", asset);
+  return data.asset;
+}
 
-export const saveAlert = (alert) => {
-  const alerts = getAlerts();
-  const newAlert = {
-    id: Date.now() + Math.random(), // Add randomness to prevent ID collision during batch scans
-    type: alert.type || "unknown",
-    severity: alert.severity || "LOW",
-    title: alert.title || alert.message || "Security Warning",
-    description: alert.description || "",
-    foundAt: alert.foundAt || alert.source || "External Scan",
-    resolved: !!alert.resolved,
-    assetId: alert.assetId || null,
-    timestamp: alert.timestamp || new Date().toISOString(),
-    createdAt: alert.createdAt || new Date().toISOString(),
-  };
-  alerts.push(newAlert);
-  localStorage.setItem("sw_alerts", JSON.stringify(alerts));
-  return newAlert;
-};
+export async function deleteAsset(id) {
+  await api.delete(`/assets/${id}`);
+}
 
-export const deleteAlert = (id) => {
-  const alerts = getAlerts().filter(a => a.id !== id);
-  localStorage.setItem("sw_alerts", JSON.stringify(alerts));
-};
+export async function scanAsset(id) {
+  const { data } = await api.post(`/scans/${id}`);
+  return data;
+}
 
-export const resolveAlert = (id) => {
-  const alerts = getAlerts().map(a => {
-    if (a.id === id) return { ...a, resolved: true };
-    return a;
-  });
-  localStorage.setItem("sw_alerts", JSON.stringify(alerts));
-};
+export async function getScanHistory(id) {
+  const { data } = await api.get(`/scans/${id}`);
+  return data.scans;
+}
+
+export async function getAlerts(resolved) {
+  if (resolved !== undefined) {
+    const { data } = await api.get("/alerts", { params: { resolved } });
+    return data.alerts;
+  }
+  const [open, closed] = await Promise.all([
+    api.get("/alerts", { params: { resolved: false } }),
+    api.get("/alerts", { params: { resolved: true } }),
+  ]);
+  return [...open.data.alerts, ...closed.data.alerts];
+}
+
+export async function resolveAlert(id, resolved = true) {
+  const { data } = await api.patch(`/alerts/${id}`, { resolved });
+  return data.alert;
+}
+
+export function getErrorMessage(error, fallback = "Something went wrong. Please try again.") {
+  if (error.response?.status === 429) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+  return error.response?.data?.error || fallback;
+}
