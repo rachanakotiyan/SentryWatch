@@ -315,7 +315,7 @@ export default function ScanResult({ assets, alerts, refreshData }) {
                   <div className="telemetry-grid">
                     <div><strong>Email Address:</strong> {asset.target}</div>
                     <div><strong>Breaches Found:</strong> {telemetry.breaches ?? "0"}</div>
-                    <div><strong>Mode:</strong> {telemetry.demo ? "Demo Mode (Mock data)" : "Live HIBP API"}</div>
+                    <div><strong>Mode:</strong> {telemetry.demo ? "Demo Mode (Mock data)" : `Live ${telemetry.provider || "HIBP"} API`}</div>
                     {Array.isArray(telemetry.names) && telemetry.names.length > 0 && (
                       <div style={{ gridColumn: "1 / -1" }}>
                         <strong>Compromised In:</strong> {telemetry.names.join(", ")}

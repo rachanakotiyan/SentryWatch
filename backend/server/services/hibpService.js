@@ -18,15 +18,54 @@ export function demoEmailScan(email) {
   return { findings, telemetry: { demo: true, breaches: findings.length } };
 }
 
+// Keyword match on XposedOrNot's semicolon-separated "xposed_data" string.
+const XON_CRITICAL = /credit card|bank|social security|passport|government|national id|payment|financial/i;
+
 /**
- * Email breach lookup. Needs a paid HIBP API key - there is no free email endpoint.
- * Without a key this throws (503) instead of inventing results.
+ * Free email breach lookup via XposedOrNot (no API key; ~25 lookups/hour, 100/day per IP).
+ * Uses /v1/breach-analytics, which returns per-breach details: { ExposedBreaches: { breaches_details: [...] } }.
+ */
+export async function scanEmailXon(email, { timeoutMs = 10000 } = {}) {
+  const url = `https://api.xposedornot.com/v1/breach-analytics?email=${encodeURIComponent(email)}`;
+  let res;
+  try {
+    res = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    throw new ScanError(`Could not reach XposedOrNot (${err.name === 'TimeoutError' ? 'timeout' : err.message})`, 502);
+  }
+  if (res.status === 404) return { findings: [], telemetry: { provider: 'XposedOrNot', breaches: 0 } };
+  if (res.status === 429) throw new ScanError('XposedOrNot free limit hit (about 25 lookups/hour). Try again later.', 429);
+  if (!res.ok) throw new ScanError(`XposedOrNot returned HTTP ${res.status}`, 502);
+
+  const body = await res.json();
+  const breaches = body?.ExposedBreaches?.breaches_details || [];
+  const findings = breaches.map((b) => {
+    const data = String(b.xposed_data || '').split(';').map((s) => s.trim()).filter(Boolean);
+    const hasPassword = data.some((d) => /password/i.test(d));
+    const severity = data.some((d) => XON_CRITICAL.test(d)) ? 'CRITICAL' : hasPassword ? 'HIGH' : 'MEDIUM';
+    const pwRisk = b.password_risk && b.password_risk !== 'unknown' ? ` Password storage: ${b.password_risk}.` : '';
+    return {
+      severity,
+      title: `Email found in ${b.breach} breach`,
+      details: `Exposed in ${b.xposed_date || 'unknown year'}. Data: ${data.join(', ') || 'not specified'}.${pwRisk} ` +
+        `${stripHtml(b.details || '')}`.trim() +
+        (severity === 'MEDIUM' ? '' : ' Reset this password everywhere it was reused and enable MFA.'),
+    };
+  });
+  return { findings, telemetry: { provider: 'XposedOrNot', breaches: breaches.length, names: breaches.map((b) => b.breach) } };
+}
+
+/**
+ * Email breach lookup. Order of preference:
+ *  1. HIBP (paid key in HIBP_API_KEY)
+ *  2. DEMO_MODE=true -> labelled sample data (explicit opt-in only)
+ *  3. XposedOrNot free API (default; no key needed)
+ * Failures always surface as ScanError, never as invented results.
  */
 export async function scanEmail(email, { apiKey = process.env.HIBP_API_KEY, timeoutMs = 8000, demo = process.env.DEMO_MODE === 'true' } = {}) {
   if (!apiKey) {
-    // Demo mode: only when explicitly enabled AND no real key is set. Always labelled, flagged in telemetry.
     if (demo) return demoEmailScan(email);
-    throw new ScanError('Email breach scans need HIBP_API_KEY (haveibeenpwned.com/API/Key), or set DEMO_MODE=true for labelled sample data', 503);
+    return scanEmailXon(email);
   }
 
   const url = `https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`;
@@ -53,7 +92,7 @@ export async function scanEmail(email, { apiKey = process.env.HIBP_API_KEY, time
         (severity === 'MEDIUM' ? '' : ' Reset this password everywhere it was reused and enable MFA.'),
     };
   });
-  return { findings, telemetry: { breaches: breaches.length, names: breaches.map((b) => b.Name) } };
+  return { findings, telemetry: { provider: 'HIBP', breaches: breaches.length, names: breaches.map((b) => b.Name) } };
 }
 
 /**

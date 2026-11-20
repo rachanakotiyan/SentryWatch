@@ -134,7 +134,7 @@ export default function AddAsset({ refreshData }) {
               required
             />
             <p className="form-hint">
-              {type === "EMAIL" && "Checks against data breach databases. Requires HIBP_API_KEY on the backend (or runs in demo mode)."}
+              {type === "EMAIL" && "Checks against public data breach databases (free XposedOrNot lookup, or HIBP if a key is set)."}
               {type === "DOMAIN" && "Inspects certificate trust, validity window, and RSA bit length over live port 443 TLS handshake."}
               {type === "REPOSITORY" && "Inspects public git trees for tracked secrets, private keys, and environment files without cloning."}
             </p>

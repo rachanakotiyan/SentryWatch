@@ -122,8 +122,32 @@ describe('githubService', () => {
 });
 
 describe('hibpService', () => {
-  test('email: no API key and no demo flag -> 503, never fake data', async () => {
-    await assert.rejects(scanEmail('a@b.com', { apiKey: '', demo: false }), { status: 503 });
+  test('email: no API key and no demo flag -> free XposedOrNot lookup with severity mapping', async () => {
+    let requested;
+    stubFetch([['api.xposedornot.com/v1/breach-analytics', (url) => {
+      requested = url;
+      return json({ ExposedBreaches: { breaches_details: [
+        { breach: 'Alpha', xposed_data: 'Email addresses;Passwords', xposed_date: '2019', password_risk: 'plaintext', details: 'Leak <b>here</b>' },
+        { breach: 'Beta', xposed_data: 'Email addresses;Names', xposed_date: '2020' },
+        { breach: 'Gamma', xposed_data: 'Email addresses;Credit card info', xposed_date: '2021' },
+      ] } });
+    }]]);
+    const r = await scanEmail('a@b.com', { apiKey: '', demo: false });
+    assert.equal(requested, 'https://api.xposedornot.com/v1/breach-analytics?email=a%40b.com');
+    assert.deepEqual(r.findings.map((f) => f.severity), ['HIGH', 'MEDIUM', 'CRITICAL']);
+    assert.equal(r.telemetry.provider, 'XposedOrNot');
+    assert.match(r.findings[0].details, /plaintext.*Leak here/);
+  });
+
+  test('email (XposedOrNot): no breaches / 404 = clean, 429 = rate limited, never fake data', async () => {
+    stubFetch([['xposedornot', json({ ExposedBreaches: null, BreachesSummary: { site: '' } })]]);
+    assert.deepEqual((await scanEmail('a@b.com', { apiKey: '', demo: false })).findings, []);
+    stubFetch([['xposedornot', new Response('', { status: 404 })]]);
+    assert.deepEqual((await scanEmail('a@b.com', { apiKey: '', demo: false })).findings, []);
+    stubFetch([['xposedornot', new Response('', { status: 429 })]]);
+    await assert.rejects(scanEmail('a@b.com', { apiKey: '', demo: false }), { status: 429 });
+    stubFetch([['xposedornot', () => { throw new Error('offline'); }]]);
+    await assert.rejects(scanEmail('a@b.com', { apiKey: '', demo: false }), { status: 502 });
   });
 
   test('email: demo mode returns labelled sample data; clean/safe emails are clean; real key wins', async () => {
