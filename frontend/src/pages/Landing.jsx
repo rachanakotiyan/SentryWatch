@@ -140,21 +140,46 @@ export default function Landing() {
             <div className="card about-card">
               <div className="about-grid">
                 <div className="about-item">
-                  <div className="about-icon">&#128065;</div>
+                  <div className="about-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="22" y1="12" x2="18" y2="12" />
+                      <line x1="6" y1="12" x2="2" y2="12" />
+                      <line x1="12" y1="6" x2="12" y2="2" />
+                      <line x1="12" y1="22" x2="12" y2="18" />
+                    </svg>
+                  </div>
                   <h3>The Attacker&apos;s Perspective</h3>
                   <p>
                     Rather than installing internal agents, SentryWatch evaluates your infrastructure from the outside in—just as an adversary or reconnaissance bot would scan your public perimeter.
                   </p>
                 </div>
                 <div className="about-item">
-                  <div className="about-icon">&#9889;</div>
+                  <div className="about-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      <path d="M9 12l2 2 4-4" />
+                    </svg>
+                  </div>
                   <h3>Non-Invasive Verification</h3>
                   <p>
                     Probes use standard network handshakes, official GitHub metadata trees, and privacy-preserving hash queries. No disruption to your production workloads.
                   </p>
                 </div>
                 <div className="about-item">
-                  <div className="about-icon">&#128202;</div>
+                  <div className="about-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="4" y1="21" x2="4" y2="14" />
+                      <line x1="4" y1="10" x2="4" y2="3" />
+                      <line x1="12" y1="21" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12" y2="3" />
+                      <line x1="20" y1="21" x2="20" y2="16" />
+                      <line x1="20" y1="12" x2="20" y2="3" />
+                      <line x1="1" y1="14" x2="7" y2="14" />
+                      <line x1="9" y1="8" x2="15" y2="8" />
+                      <line x1="17" y1="16" x2="23" y2="16" />
+                    </svg>
+                  </div>
                   <h3>Actionable Prioritisation</h3>
                   <p>
                     Clear 0–100 risk scoring separates false alarms from critical credential leaks, so your team focuses on what exposes immediate risk.
@@ -353,7 +378,14 @@ export default function Landing() {
 
             <div className="security-grid">
               <div className="card security-item">
-                <div className="security-icon">&#128272;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+                    <line x1="6" y1="6" x2="6.01" y2="6" />
+                    <line x1="6" y1="18" x2="6.01" y2="18" />
+                  </svg>
+                </div>
                 <h3>Server-Side Credential Isolation</h3>
                 <p>
                   API keys (such as GitHub PATs and HIBP subscriptions) are stored exclusively in backend environment variables and are never transmitted to client browsers.
@@ -361,7 +393,12 @@ export default function Landing() {
               </div>
 
               <div className="card security-item">
-                <div className="security-icon">&#129525;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
                 <h3>bcrypt Password Hashing</h3>
                 <p>
                   User passwords are salted and hashed using bcrypt at work factor 12. Password hashes never leave the database and are never returned in auth endpoints.
@@ -369,7 +406,13 @@ export default function Landing() {
               </div>
 
               <div className="card security-item">
-                <div className="security-icon">&#128179;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    <path d="M12 8v4" />
+                    <path d="M12 16h.01" />
+                  </svg>
+                </div>
                 <h3>HMAC-SHA256 JWT Sessions</h3>
                 <p>
                   Stateless authenticated sessions use HS256 tokens expiring in 24 hours, with strict algorithm validation and rejection of insecure <code>none</code> algorithms.
@@ -377,7 +420,12 @@ export default function Landing() {
               </div>
 
               <div className="card security-item">
-                <div className="security-icon">&#128526;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </div>
                 <h3>k-Anonymity Breach Queries</h3>
                 <p>
                   Password lookups use Cloudflare/PwnedPasswords k-anonymity: only the first 5 characters of a SHA-1 hash leave the server, keeping the actual password impossible to reconstruct.
@@ -385,7 +433,12 @@ export default function Landing() {
               </div>
 
               <div className="card security-item">
-                <div className="security-icon">&#9986;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="16 18 22 12 16 6" />
+                    <polyline points="8 6 2 12 8 18" />
+                  </svg>
+                </div>
                 <h3>Redacted Secret Findings</h3>
                 <p>
                   When a leaked secret is found in a repository, only an obfuscated prefix (e.g. <code>AKIA...(20 chars)</code>) is stored and shown. Raw credentials are never echoed.
@@ -393,7 +446,13 @@ export default function Landing() {
               </div>
 
               <div className="card security-item">
-                <div className="security-icon">&#128277;</div>
+                <div className="security-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                </div>
                 <h3>SSRF &amp; Target Validation</h3>
                 <p>
                   Domain scans strictly resolve against public DNS before initiating TLS handshakes, blocking internal, loopback, and cloud metadata addresses (169.254.169.254).

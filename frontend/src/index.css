@@ -816,8 +816,20 @@ p {
   gap: 32px;
 }
 .about-icon {
-  font-size: 28px;
-  margin-bottom: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--color-primary-tint);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  margin-bottom: 16px;
+}
+.about-icon svg {
+  width: 22px;
+  height: 22px;
 }
 .about-item h3 {
   font-size: 18px;
@@ -965,8 +977,20 @@ p {
   padding: 24px;
 }
 .security-icon {
-  font-size: 24px;
-  margin-bottom: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--color-primary-tint);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  margin-bottom: 16px;
+}
+.security-icon svg {
+  width: 20px;
+  height: 20px;
 }
 .security-item h3 {
   font-size: 16px;
